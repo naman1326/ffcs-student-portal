@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { Member } from "../types";
 
@@ -34,9 +34,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const unsubMember = onSnapshot(
       doc(db, "members", user.uid),
-      (snap) => {
-        setMember(snap.exists() ? (snap.data() as Member) : null);
-        setLoading(false);
+      async (snap) => {
+        if (snap.exists()) {
+          setMember(snap.data() as Member);
+          setLoading(false);
+        } else if (user.email) {
+          // Fallback: lookup by collegeEmail in case document ID is not user.uid
+          try {
+            const emailQuery = query(
+              collection(db, "members"),
+              where("collegeEmail", "==", user.email.trim().toLowerCase())
+            );
+            const querySnap = await getDocs(emailQuery);
+            if (!querySnap.empty) {
+              setMember(querySnap.docs[0].data() as Member);
+            } else {
+              setMember(null);
+            }
+          } catch {
+            setMember(null);
+          }
+          setLoading(false);
+        } else {
+          setMember(null);
+          setLoading(false);
+        }
       },
       () => setLoading(false)
     );
