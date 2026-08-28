@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "../firebase";
 import { Meeting } from "../types";
 
@@ -10,9 +10,15 @@ export default function Meetings() {
   const [search, setSearch] = useState<string>("");
 
   useEffect(() => {
-    getDocs(query(collection(db, "meetings"), orderBy("date", "desc")))
-      .then((snap) => setMeetings(snap.docs.map((d) => d.data() as Meeting)))
-      .finally(() => setLoading(false));
+    const unsub = onSnapshot(
+      query(collection(db, "meetings"), orderBy("date", "desc")),
+      (snap) => {
+        setMeetings(snap.docs.map((d) => d.data() as Meeting));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+    return unsub;
   }, []);
 
   const scheduledCount = meetings.filter((m) => m.status === "scheduled").length;

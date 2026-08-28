@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { Meeting, MeetingAttendance } from "../types";
@@ -17,21 +17,42 @@ export default function Attendance() {
 
   useEffect(() => {
     if (!user) return;
-    async function load() {
-      const attSnap = await getDocs(query(collection(db, "meetingAttendance"), where("memberId", "==", user!.uid)));
-      const records = attSnap.docs.map((d) => d.data() as MeetingAttendance);
 
-      const meetingsSnap = await getDocs(collection(db, "meetings"));
-      const meetingsById = new Map<string, Meeting>();
-      meetingsSnap.docs.forEach((d) => meetingsById.set(d.id, d.data() as Meeting));
+    let records: MeetingAttendance[] = [];
+    let meetingsById = new Map<string, Meeting>();
 
+    const mergeAndSet = () => {
       const merged = records
         .map((r) => ({ ...r, meeting: meetingsById.get(r.meetingId) }))
         .sort((a, b) => (b.meeting?.date ?? "").localeCompare(a.meeting?.date ?? ""));
       setRows(merged);
       setLoading(false);
-    }
-    load().catch(() => setLoading(false));
+    };
+
+    const unsubAttendance = onSnapshot(
+      query(collection(db, "meetingAttendance"), where("memberId", "==", user.uid)),
+      (attSnap) => {
+        records = attSnap.docs.map((d) => d.data() as MeetingAttendance);
+        mergeAndSet();
+      },
+      () => setLoading(false)
+    );
+
+    const unsubMeetings = onSnapshot(
+      collection(db, "meetings"),
+      (meetingsSnap) => {
+        const map = new Map<string, Meeting>();
+        meetingsSnap.docs.forEach((d) => map.set(d.id, d.data() as Meeting));
+        meetingsById = map;
+        mergeAndSet();
+      },
+      () => setLoading(false)
+    );
+
+    return () => {
+      unsubAttendance();
+      unsubMeetings();
+    };
   }, [user]);
 
   const present = rows.filter((r) => r.status === "Present").length;

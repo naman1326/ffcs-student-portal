@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { ClubEvent, ExternalEventRegistration, OwnEventRegistration } from "../types";
@@ -16,20 +16,39 @@ export default function MyRegistrations() {
 
   useEffect(() => {
     if (!user) return;
-    async function load() {
-      const [externalSnap, ownSnap, eventsSnap] = await Promise.all([
-        getDocs(query(collection(db, "eventRegistrations"), where("broughtByMemberId", "==", user!.uid))),
-        getDocs(query(collection(db, "ownEventRegistrations"), where("memberId", "==", user!.uid))),
-        getDocs(collection(db, "events")),
-      ]);
-      setExternal(externalSnap.docs.map((d) => d.data() as ExternalEventRegistration));
-      setOwn(ownSnap.docs.map((d) => d.data() as OwnEventRegistration));
-      const map = new Map<string, ClubEvent>();
-      eventsSnap.docs.forEach((d) => map.set(d.id, d.data() as ClubEvent));
-      setEventsById(map);
-      setLoading(false);
-    }
-    load().catch(() => setLoading(false));
+
+    const unsubExternal = onSnapshot(
+      query(collection(db, "eventRegistrations"), where("broughtByMemberId", "==", user.uid)),
+      (snap) => {
+        setExternal(snap.docs.map((d) => d.data() as ExternalEventRegistration));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+
+    const unsubOwn = onSnapshot(
+      query(collection(db, "ownEventRegistrations"), where("memberId", "==", user.uid)),
+      (snap) => {
+        setOwn(snap.docs.map((d) => d.data() as OwnEventRegistration));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+
+    const unsubEvents = onSnapshot(
+      collection(db, "events"),
+      (snap) => {
+        const map = new Map<string, ClubEvent>();
+        snap.docs.forEach((d) => map.set(d.id, d.data() as ClubEvent));
+        setEventsById(map);
+      }
+    );
+
+    return () => {
+      unsubExternal();
+      unsubOwn();
+      unsubEvents();
+    };
   }, [user]);
 
   const filteredExternal = external.filter((r) => {

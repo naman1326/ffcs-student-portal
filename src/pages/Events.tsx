@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
 import { ClubEvent } from "../types";
 
@@ -10,9 +10,15 @@ export default function Events() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    getDocs(query(collection(db, "events"), where("status", "==", "published"), orderBy("date")))
-      .then((snap) => setEvents(snap.docs.map((d) => d.data() as ClubEvent)))
-      .finally(() => setLoading(false));
+    const unsub = onSnapshot(
+      query(collection(db, "events"), where("status", "==", "published"), orderBy("date")),
+      (snap) => {
+        setEvents(snap.docs.map((d) => d.data() as ClubEvent));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+    return unsub;
   }, []);
 
   const filteredEvents = events.filter((ev) => {

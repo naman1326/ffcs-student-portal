@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { Meeting, ClubEvent, MeetingAttendance } from "../types";
@@ -23,29 +23,50 @@ export default function Dashboard() {
     if (!user) return;
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    async function load() {
-      const [meetingsSnap, eventsSnap, announcementsSnap, attendanceSnap] = await Promise.all([
-        getDocs(
-          query(collection(db, "meetings"), where("status", "==", "scheduled"), where("date", ">=", todayStr), orderBy("date"), limit(5))
-        ),
-        getDocs(
-          query(collection(db, "events"), where("status", "==", "published"), where("date", ">=", todayStr), orderBy("date"), limit(5))
-        ),
-        getDocs(query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(5))),
-        getDocs(query(collection(db, "meetingAttendance"), where("memberId", "==", user!.uid))),
-      ]);
+    const unsubMeetings = onSnapshot(
+      query(collection(db, "meetings"), where("status", "==", "scheduled"), where("date", ">=", todayStr), orderBy("date"), limit(5)),
+      (snap) => {
+        setUpcomingMeetings(snap.docs.map((d) => d.data() as Meeting));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
 
-      setUpcomingMeetings(meetingsSnap.docs.map((d) => d.data() as Meeting));
-      setUpcomingEvents(eventsSnap.docs.map((d) => d.data() as ClubEvent));
-      setAnnouncements(announcementsSnap.docs.map((d) => d.data() as Announcement));
+    const unsubEvents = onSnapshot(
+      query(collection(db, "events"), where("status", "==", "published"), where("date", ">=", todayStr), orderBy("date"), limit(5)),
+      (snap) => {
+        setUpcomingEvents(snap.docs.map((d) => d.data() as ClubEvent));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
 
-      const records = attendanceSnap.docs.map((d) => d.data() as MeetingAttendance);
-      const present = records.filter((r) => r.status === "Present").length;
-      setAttendanceStats({ present, total: records.length });
+    const unsubAnnouncements = onSnapshot(
+      query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(5)),
+      (snap) => {
+        setAnnouncements(snap.docs.map((d) => d.data() as Announcement));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
 
-      setLoading(false);
-    }
-    load().catch(() => setLoading(false));
+    const unsubAttendance = onSnapshot(
+      query(collection(db, "meetingAttendance"), where("memberId", "==", user.uid)),
+      (snap) => {
+        const records = snap.docs.map((d) => d.data() as MeetingAttendance);
+        const present = records.filter((r) => r.status === "Present").length;
+        setAttendanceStats({ present, total: records.length });
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+
+    return () => {
+      unsubMeetings();
+      unsubEvents();
+      unsubAnnouncements();
+      unsubAttendance();
+    };
   }, [user]);
 
   const attendanceRate = attendanceStats && attendanceStats.total > 0

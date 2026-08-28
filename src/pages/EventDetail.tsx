@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { api, fileToBase64, friendlyError } from "../lib/api";
@@ -42,16 +42,27 @@ export default function EventDetail() {
 
   useEffect(() => {
     if (!eventId || !user) return;
-    async function load() {
-      const [eventSnap, attSnap] = await Promise.all([
-        getDoc(doc(db, "events", eventId!)),
-        getDoc(doc(db, "eventAttendance", `${eventId}_${user!.uid}`)),
-      ]);
-      setEvent(eventSnap.exists() ? (eventSnap.data() as ClubEvent) : null);
-      setMyAttendance(attSnap.exists() ? (attSnap.data() as EventAttendance) : null);
-      setLoading(false);
-    }
-    load().catch(() => setLoading(false));
+
+    const unsubEvent = onSnapshot(
+      doc(db, "events", eventId),
+      (snap) => {
+        setEvent(snap.exists() ? (snap.data() as ClubEvent) : null);
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+
+    const unsubAtt = onSnapshot(
+      doc(db, "eventAttendance", `${eventId}_${user.uid}`),
+      (snap) => {
+        setMyAttendance(snap.exists() ? (snap.data() as EventAttendance) : null);
+      }
+    );
+
+    return () => {
+      unsubEvent();
+      unsubAtt();
+    };
   }, [eventId, user]);
 
   const checkAvailability = useCallback(async () => {
