@@ -17,42 +17,64 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [member, setMember] = useState<Member | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [memberLoading, setMemberLoading] = useState(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
-      if (!firebaseUser) {
+      setAuthLoading(false);
+      if (firebaseUser) {
+        setMemberLoading(true);
+      } else {
         setMember(null);
-        setLoading(false);
+        setMemberLoading(false);
       }
     });
     return unsubAuth;
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setMember(null);
+      setMemberLoading(false);
+      return;
+    }
+
+    setMemberLoading(true);
     const unsubMember = onSnapshot(
       doc(db, "members", user.uid),
       (snap) => {
         setMember(snap.exists() ? (snap.data() as Member) : null);
-        setLoading(false);
+        setMemberLoading(false);
       },
-      () => setLoading(false)
+      (err) => {
+        console.error("Firestore member listener error:", err);
+        setMember(null);
+        setMemberLoading(false);
+      }
     );
     return unsubMember;
   }, [user]);
 
+  const loading = authLoading || memberLoading;
+
   const signIn = async (email: string, password: string) => {
+    setMemberLoading(true);
     await signInWithEmailAndPassword(auth, email, password);
   };
 
   const signOut = async () => {
     await firebaseSignOut(auth);
+    setUser(null);
+    setMember(null);
+    setMemberLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, member, loading, signIn, signOut }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, member, loading, signIn, signOut }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 
