@@ -13,7 +13,7 @@ export default function Meetings() {
     const unsub = onSnapshot(
       query(collection(db, "meetings"), orderBy("date", "desc")),
       (snap) => {
-        setMeetings(snap.docs.map((d) => d.data() as Meeting));
+        setMeetings(snap.docs.map((d) => ({ ...d.data(), meetingId: d.data().meetingId || d.id } as Meeting)));
         setLoading(false);
       },
       () => setLoading(false)

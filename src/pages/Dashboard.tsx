@@ -26,7 +26,7 @@ export default function Dashboard() {
     const unsubMeetings = onSnapshot(
       query(collection(db, "meetings"), where("status", "==", "scheduled"), where("date", ">=", todayStr), orderBy("date"), limit(5)),
       (snap) => {
-        setUpcomingMeetings(snap.docs.map((d) => d.data() as Meeting));
+        setUpcomingMeetings(snap.docs.map((d) => ({ ...d.data(), meetingId: d.data().meetingId || d.id } as Meeting)));
         setLoading(false);
       },
       () => setLoading(false)
@@ -35,7 +35,7 @@ export default function Dashboard() {
     const unsubEvents = onSnapshot(
       query(collection(db, "events"), where("status", "==", "published"), where("date", ">=", todayStr), orderBy("date"), limit(5)),
       (snap) => {
-        setUpcomingEvents(snap.docs.map((d) => d.data() as ClubEvent));
+        setUpcomingEvents(snap.docs.map((d) => ({ ...d.data(), eventId: d.data().eventId || d.id } as ClubEvent)));
         setLoading(false);
       },
       () => setLoading(false)
@@ -44,7 +44,7 @@ export default function Dashboard() {
     const unsubAnnouncements = onSnapshot(
       query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(5)),
       (snap) => {
-        setAnnouncements(snap.docs.map((d) => d.data() as Announcement));
+        setAnnouncements(snap.docs.map((d) => ({ ...d.data(), announcementId: d.data().announcementId || d.id } as Announcement)));
         setLoading(false);
       },
       () => setLoading(false)

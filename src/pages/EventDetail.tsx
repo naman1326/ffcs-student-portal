@@ -46,7 +46,7 @@ export default function EventDetail() {
     const unsubEvent = onSnapshot(
       doc(db, "events", eventId),
       (snap) => {
-        setEvent(snap.exists() ? (snap.data() as ClubEvent) : null);
+        setEvent(snap.exists() ? ({ ...snap.data(), eventId: snap.data()?.eventId || snap.id } as ClubEvent) : null);
         setLoading(false);
       },
       () => setLoading(false)

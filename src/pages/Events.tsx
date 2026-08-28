@@ -13,7 +13,7 @@ export default function Events() {
     const unsub = onSnapshot(
       query(collection(db, "events"), where("status", "==", "published"), orderBy("date")),
       (snap) => {
-        setEvents(snap.docs.map((d) => d.data() as ClubEvent));
+        setEvents(snap.docs.map((d) => ({ ...d.data(), eventId: d.data().eventId || d.id } as ClubEvent)));
         setLoading(false);
       },
       () => setLoading(false)
