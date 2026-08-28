@@ -2,15 +2,21 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
-import { Meeting, MeetingAttendance } from "../types";
+import { Meeting, ClubEvent, MeetingAttendance, EventAttendance, AttendanceStatus } from "../types";
 
-interface Row extends MeetingAttendance {
-  meeting?: Meeting;
+interface UnifiedAttendanceRow {
+  id: string;
+  type: "meeting" | "event";
+  title: string;
+  locationOrVenue: string;
+  date: string;
+  status: AttendanceStatus;
+  otherReason: string | null;
 }
 
 export default function Attendance() {
   const { user } = useAuth();
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<UnifiedAttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
@@ -18,21 +24,63 @@ export default function Attendance() {
   useEffect(() => {
     if (!user) return;
 
-    let records: MeetingAttendance[] = [];
+    let meetingRecords: MeetingAttendance[] = [];
+    let eventRecords: EventAttendance[] = [];
     let meetingsById = new Map<string, Meeting>();
+    let eventsById = new Map<string, ClubEvent>();
 
     const mergeAndSet = () => {
-      const merged = records
-        .map((r) => ({ ...r, meeting: meetingsById.get(r.meetingId) }))
-        .sort((a, b) => (b.meeting?.date ?? "").localeCompare(a.meeting?.date ?? ""));
+      const meetingRows: UnifiedAttendanceRow[] = meetingRecords
+        .filter((r) => r.status === "Present" || r.status === "Absent" || r.status === "Other")
+        .map((r) => {
+          const m = meetingsById.get(r.meetingId);
+          return {
+            id: `meeting_${r.meetingId}`,
+            type: "meeting",
+            title: m?.title ?? "(Unassigned Meeting)",
+            locationOrVenue: m?.location ?? "",
+            date: m?.date ?? "",
+            status: r.status,
+            otherReason: r.otherReason,
+          };
+        });
+
+      const eventRows: UnifiedAttendanceRow[] = eventRecords
+        .filter((r) => r.status === "Present" || r.status === "Absent" || r.status === "Other")
+        .map((r) => {
+          const ev = eventsById.get(r.eventId);
+          return {
+            id: `event_${r.eventId}`,
+            type: "event",
+            title: ev?.title ?? "(Unassigned Event)",
+            locationOrVenue: ev?.venue ?? "",
+            date: ev?.date ?? "",
+            status: r.status,
+            otherReason: r.otherReason,
+          };
+        });
+
+      const merged = [...meetingRows, ...eventRows].sort((a, b) =>
+        (b.date ?? "").localeCompare(a.date ?? "")
+      );
+
       setRows(merged);
       setLoading(false);
     };
 
-    const unsubAttendance = onSnapshot(
+    const unsubMeetingAttendance = onSnapshot(
       query(collection(db, "meetingAttendance"), where("memberId", "==", user.uid)),
-      (attSnap) => {
-        records = attSnap.docs.map((d) => d.data() as MeetingAttendance);
+      (snap) => {
+        meetingRecords = snap.docs.map((d) => d.data() as MeetingAttendance);
+        mergeAndSet();
+      },
+      () => setLoading(false)
+    );
+
+    const unsubEventAttendance = onSnapshot(
+      query(collection(db, "eventAttendance"), where("memberId", "==", user.uid)),
+      (snap) => {
+        eventRecords = snap.docs.map((d) => d.data() as EventAttendance);
         mergeAndSet();
       },
       () => setLoading(false)
@@ -40,18 +88,31 @@ export default function Attendance() {
 
     const unsubMeetings = onSnapshot(
       collection(db, "meetings"),
-      (meetingsSnap) => {
+      (snap) => {
         const map = new Map<string, Meeting>();
-        meetingsSnap.docs.forEach((d) => map.set(d.id, d.data() as Meeting));
+        snap.docs.forEach((d) => map.set(d.id, { ...d.data(), meetingId: d.data().meetingId || d.id } as Meeting));
         meetingsById = map;
         mergeAndSet();
       },
       () => setLoading(false)
     );
 
+    const unsubEvents = onSnapshot(
+      collection(db, "events"),
+      (snap) => {
+        const map = new Map<string, ClubEvent>();
+        snap.docs.forEach((d) => map.set(d.id, { ...d.data(), eventId: d.data().eventId || d.id } as ClubEvent));
+        eventsById = map;
+        mergeAndSet();
+      },
+      () => setLoading(false)
+    );
+
     return () => {
-      unsubAttendance();
+      unsubMeetingAttendance();
+      unsubEventAttendance();
       unsubMeetings();
+      unsubEvents();
     };
   }, [user]);
 
@@ -65,10 +126,11 @@ export default function Attendance() {
     if (filter !== "all" && r.status.toLowerCase() !== filter.toLowerCase()) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
-      const title = r.meeting?.title?.toLowerCase() || "";
+      const title = r.title.toLowerCase();
       const reason = r.otherReason?.toLowerCase() || "";
-      const date = r.meeting?.date || "";
-      return title.includes(q) || reason.includes(q) || date.includes(q);
+      const date = r.date || "";
+      const loc = r.locationOrVenue.toLowerCase();
+      return title.includes(q) || reason.includes(q) || date.includes(q) || loc.includes(q);
     }
     return true;
   });
@@ -78,7 +140,7 @@ export default function Attendance() {
       <div style={{ marginBottom: 18 }}>
         <h1>Attendance</h1>
         <p className="page-subtitle">
-          Summary of your attendance record across meetings. (Present ÷ Total Meetings).
+          Summary of your attendance record across meetings and events.
         </p>
       </div>
 
@@ -154,7 +216,7 @@ export default function Attendance() {
             <table>
               <thead>
                 <tr>
-                  <th>Meeting</th>
+                  <th>Session / Activity</th>
                   <th>Date</th>
                   <th>Status</th>
                   <th>Notes / Reason</th>
@@ -162,19 +224,24 @@ export default function Attendance() {
               </thead>
               <tbody>
                 {filteredRows.map((r) => (
-                  <tr key={r.meetingId}>
+                  <tr key={r.id}>
                     <td>
-                      <strong style={{ color: "var(--text-primary)" }}>
-                        {r.meeting?.title ?? "(Unassigned Meeting)"}
-                      </strong>
-                      {r.meeting?.location && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: "0.72rem", padding: "1px 6px", borderRadius: 4, background: r.type === "event" ? "rgba(255, 107, 53, 0.15)" : "rgba(255, 255, 255, 0.08)", color: r.type === "event" ? "var(--brand-saffron)" : "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+                          {r.type === "event" ? "🚩 Event" : "📅 Meeting"}
+                        </span>
+                        <strong style={{ color: "var(--text-primary)" }}>
+                          {r.title}
+                        </strong>
+                      </div>
+                      {r.locationOrVenue && (
                         <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 2 }}>
-                          📍 {r.meeting.location}
+                          📍 {r.locationOrVenue}
                         </div>
                       )}
                     </td>
                     <td style={{ color: "var(--text-secondary)", fontSize: "0.85rem", whiteSpace: "nowrap" }}>
-                      {r.meeting?.date ?? "—"}
+                      {r.date || "—"}
                     </td>
                     <td>
                       <span className={`badge badge-${r.status.toLowerCase()}`}>
@@ -200,11 +267,16 @@ export default function Attendance() {
           {/* Mobile Card List View */}
           <div className="mobile-card-list">
             {filteredRows.map((r) => (
-              <div key={r.meetingId} className="mobile-data-card">
+              <div key={r.id} className="mobile-data-card">
                 <div className="mobile-card-top">
-                  <span className="mobile-card-title">
-                    {r.meeting?.title ?? "(Unassigned Meeting)"}
-                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ alignSelf: "flex-start", fontSize: "0.68rem", padding: "1px 6px", borderRadius: 4, background: r.type === "event" ? "rgba(255, 107, 53, 0.15)" : "rgba(255, 255, 255, 0.08)", color: r.type === "event" ? "var(--brand-saffron)" : "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+                      {r.type === "event" ? "🚩 Event" : "📅 Meeting"}
+                    </span>
+                    <span className="mobile-card-title">
+                      {r.title}
+                    </span>
+                  </div>
                   <span className={`badge badge-${r.status.toLowerCase()}`}>
                     <span className={`status-dot ${r.status === "Present" ? "is-done" : ""}`} />
                     {r.status}
@@ -212,8 +284,8 @@ export default function Attendance() {
                 </div>
 
                 <div className="mobile-card-meta">
-                  <span>🗓️ {r.meeting?.date ?? "—"}</span>
-                  {r.meeting?.location && <span>📍 {r.meeting.location}</span>}
+                  <span>🗓️ {r.date || "—"}</span>
+                  {r.locationOrVenue && <span>📍 {r.locationOrVenue}</span>}
                 </div>
 
                 {r.otherReason && (

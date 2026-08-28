@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
-import { Meeting, ClubEvent, MeetingAttendance } from "../types";
+import { Meeting, ClubEvent, MeetingAttendance, EventAttendance } from "../types";
 
 interface Announcement {
   announcementId: string;
@@ -22,6 +22,17 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     const todayStr = new Date().toISOString().slice(0, 10);
+
+    let meetingRecords: MeetingAttendance[] = [];
+    let eventRecords: EventAttendance[] = [];
+
+    const recalculateAttendance = () => {
+      const allRecords = [...meetingRecords, ...eventRecords];
+      // Only marked records (status set to Present, Absent, or Other)
+      const marked = allRecords.filter((r) => r.status === "Present" || r.status === "Absent" || r.status === "Other");
+      const present = marked.filter((r) => r.status === "Present").length;
+      setAttendanceStats(marked.length > 0 ? { present, total: marked.length } : { present: 0, total: 0 });
+    };
 
     const unsubMeetings = onSnapshot(
       query(collection(db, "meetings"), where("status", "==", "scheduled"), where("date", ">=", todayStr), orderBy("date"), limit(5)),
@@ -50,12 +61,21 @@ export default function Dashboard() {
       () => setLoading(false)
     );
 
-    const unsubAttendance = onSnapshot(
+    const unsubMeetingAttendance = onSnapshot(
       query(collection(db, "meetingAttendance"), where("memberId", "==", user.uid)),
       (snap) => {
-        const records = snap.docs.map((d) => d.data() as MeetingAttendance);
-        const present = records.filter((r) => r.status === "Present").length;
-        setAttendanceStats({ present, total: records.length });
+        meetingRecords = snap.docs.map((d) => d.data() as MeetingAttendance);
+        recalculateAttendance();
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+
+    const unsubEventAttendance = onSnapshot(
+      query(collection(db, "eventAttendance"), where("memberId", "==", user.uid)),
+      (snap) => {
+        eventRecords = snap.docs.map((d) => d.data() as EventAttendance);
+        recalculateAttendance();
         setLoading(false);
       },
       () => setLoading(false)
@@ -65,7 +85,8 @@ export default function Dashboard() {
       unsubMeetings();
       unsubEvents();
       unsubAnnouncements();
-      unsubAttendance();
+      unsubMeetingAttendance();
+      unsubEventAttendance();
     };
   }, [user]);
 
