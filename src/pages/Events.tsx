@@ -2,15 +2,18 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
-import { ClubEvent } from "../types";
+import { useAuth } from "../context/AuthContext";
+import { ClubEvent, EventAttendance } from "../types";
 
 export default function Events() {
+  const { user } = useAuth();
   const [events, setEvents] = useState<ClubEvent[]>([]);
+  const [attendanceMap, setAttendanceMap] = useState<Map<string, EventAttendance>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const unsub = onSnapshot(
+    const unsubEvents = onSnapshot(
       query(collection(db, "events"), where("status", "==", "published"), orderBy("date")),
       (snap) => {
         setEvents(snap.docs.map((d) => ({ ...d.data(), eventId: d.data().eventId || d.id } as ClubEvent)));
@@ -18,8 +21,27 @@ export default function Events() {
       },
       () => setLoading(false)
     );
-    return unsub;
-  }, []);
+
+    let unsubAttendance = () => {};
+    if (user) {
+      unsubAttendance = onSnapshot(
+        query(collection(db, "eventAttendance"), where("memberId", "==", user.uid)),
+        (snap) => {
+          const map = new Map<string, EventAttendance>();
+          snap.docs.forEach((d) => {
+            const data = d.data() as EventAttendance;
+            map.set(data.eventId, data);
+          });
+          setAttendanceMap(map);
+        }
+      );
+    }
+
+    return () => {
+      unsubEvents();
+      unsubAttendance();
+    };
+  }, [user]);
 
   const filteredEvents = events.filter((ev) => {
     if (!search.trim()) return true;
@@ -71,7 +93,7 @@ export default function Events() {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
           {filteredEvents.map((ev) => {
-            const deadlinePassed = new Date(ev.registrationDeadline).getTime() < Date.now();
+            const myAtt = attendanceMap.get(ev.eventId);
             return (
               <Link
                 key={ev.eventId}
@@ -82,9 +104,17 @@ export default function Events() {
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
                     <h2 className="event-card-title" style={{ margin: 0, fontSize: "1.1rem" }}>{ev.title}</h2>
-                    <span className={`badge ${deadlinePassed ? "badge-absent" : "badge-confirmed"}`}>
-                      {deadlinePassed ? "Closed" : "Open"}
-                    </span>
+                    {myAtt ? (
+                      <span className={`badge badge-${myAtt.status.toLowerCase()}`}>
+                        <span className={`status-dot ${myAtt.status === "Present" ? "is-done" : ""}`} />
+                        {myAtt.status}
+                      </span>
+                    ) : (
+                      <span className="badge badge-scheduled">
+                        <span className="status-dot" />
+                        Pending
+                      </span>
+                    )}
                   </div>
 
                   <div className="event-meta-badge" style={{ marginTop: 4 }}>
@@ -104,7 +134,7 @@ export default function Events() {
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, paddingTop: 10, borderTop: "1px solid rgba(255, 107, 53, 0.12)" }}>
                   <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
-                    Deadline: {new Date(ev.registrationDeadline).toLocaleDateString()}
+                    🗓️ {ev.date}
                   </div>
                   <span className="btn btn-primary btn-sm" style={{ minHeight: "32px", padding: "4px 12px" }}>
                     Details →

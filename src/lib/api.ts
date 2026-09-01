@@ -14,25 +14,9 @@ export function fileToBase64(file: File): Promise<string> {
   });
 }
 
-/** Extracts a friendly message out of a Firebase Functions HttpsError. */
+/** Extracts a friendly message out of a Firebase Functions / Auth error. */
 export function friendlyError(err: unknown): string {
   const e = err as { message?: string; code?: string };
   return e?.message || "Something went wrong. Please try again.";
 }
 
-export const api = {
-  checkRegistrationAvailability: httpsCallable<
-    { eventId: string; studentRegistrationNumber: string },
-    { valid: boolean; available: boolean; isClubMember: boolean }
-  >(functions, "checkRegistrationAvailability"),
-
-  submitExternalRegistration: httpsCallable<
-    { eventId: string; studentRegistrationNumber: string; fileBase64: string },
-    { registrationId: string; fileName: string }
-  >(functions, "submitExternalRegistration"),
-
-  submitOwnRegistration: httpsCallable<
-    { eventId: string; fileBase64: string },
-    { registrationId: string; fileName: string }
-  >(functions, "submitOwnRegistration"),
-};

@@ -7,7 +7,6 @@ const NAV_ITEMS = [
   { to: "/meetings", label: "Meetings", icon: "📅" },
   { to: "/attendance", label: "Attendance", icon: "✅" },
   { to: "/events", label: "Events", icon: "🚩" },
-  { to: "/my-registrations", label: "Registrations", icon: "📑" },
 ];
 
 export default function Layout() {

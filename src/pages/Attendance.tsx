@@ -30,35 +30,37 @@ export default function Attendance() {
     let eventsById = new Map<string, ClubEvent>();
 
     const mergeAndSet = () => {
-      const meetingRows: UnifiedAttendanceRow[] = meetingRecords
-        .filter((r) => r.status === "Present" || r.status === "Absent" || r.status === "Other")
-        .map((r) => {
-          const m = meetingsById.get(r.meetingId);
-          return {
-            id: `meeting_${r.meetingId}`,
-            type: "meeting",
-            title: m?.title ?? "(Unassigned Meeting)",
-            locationOrVenue: m?.location ?? "",
-            date: m?.date ?? "",
-            status: r.status,
-            otherReason: r.otherReason,
-          };
+      const meetingRows: UnifiedAttendanceRow[] = [];
+      for (const r of meetingRecords) {
+        if (r.status !== "Present" && r.status !== "Absent" && r.status !== "Other") continue;
+        const m = meetingsById.get(r.meetingId);
+        if (!m || m.status === "cancelled") continue;
+        meetingRows.push({
+          id: `meeting_${r.meetingId}`,
+          type: "meeting",
+          title: m.title,
+          locationOrVenue: m.location ?? "",
+          date: m.date ?? "",
+          status: r.status,
+          otherReason: r.otherReason,
         });
+      }
 
-      const eventRows: UnifiedAttendanceRow[] = eventRecords
-        .filter((r) => r.status === "Present" || r.status === "Absent" || r.status === "Other")
-        .map((r) => {
-          const ev = eventsById.get(r.eventId);
-          return {
-            id: `event_${r.eventId}`,
-            type: "event",
-            title: ev?.title ?? "(Unassigned Event)",
-            locationOrVenue: ev?.venue ?? "",
-            date: ev?.date ?? "",
-            status: r.status,
-            otherReason: r.otherReason,
-          };
+      const eventRows: UnifiedAttendanceRow[] = [];
+      for (const r of eventRecords) {
+        if (r.status !== "Present" && r.status !== "Absent" && r.status !== "Other") continue;
+        const ev = eventsById.get(r.eventId);
+        if (!ev || ev.status !== "published") continue;
+        eventRows.push({
+          id: `event_${r.eventId}`,
+          type: "event",
+          title: ev.title,
+          locationOrVenue: ev.venue ?? "",
+          date: ev.date ?? "",
+          status: r.status,
+          otherReason: r.otherReason,
         });
+      }
 
       const merged = [...meetingRows, ...eventRows].sort((a, b) =>
         (b.date ?? "").localeCompare(a.date ?? "")
@@ -98,7 +100,7 @@ export default function Attendance() {
     );
 
     const unsubEvents = onSnapshot(
-      collection(db, "events"),
+      query(collection(db, "events"), where("status", "==", "published")),
       (snap) => {
         const map = new Map<string, ClubEvent>();
         snap.docs.forEach((d) => map.set(d.id, { ...d.data(), eventId: d.data().eventId || d.id } as ClubEvent));

@@ -29,9 +29,9 @@ Deploy `dist/` to Firebase Hosting, Vercel, Netlify, or any static host.
 - `/` — dashboard: attendance rate, upcoming meetings/events, announcements
 - `/meetings` — all meetings (view only)
 - `/attendance` — own meeting attendance history + stats (view only, cannot edit)
-- `/events` — published events
-- `/events/:eventId` — event detail, "bring an external registration" form (with live availability check), "my own registration" form
-- `/my-registrations` — registrations you've brought in vs. your own registration, kept in separate sections
+- `/events` — published club events with attendance status
+- `/events/:eventId` — event details and personal attendance record for the logged-in student
+
 
 All writes go through Cloud Functions (see `firebase-backend/functions/src`) —
 this app never writes to Firestore directly.

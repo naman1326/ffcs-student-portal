@@ -39,7 +39,7 @@ export interface ClubEvent {
   startTime: string;
   endTime: string;
   venue: string;
-  registrationDeadline: string;
+  registrationDeadline?: string;
   status: EventStatus;
 }
 
@@ -50,20 +50,3 @@ export interface EventAttendance {
   otherReason: string | null;
 }
 
-export interface OwnEventRegistration {
-  eventId: string;
-  memberId: string;
-  memberRegistrationNumber: string;
-  driveFileName: string | null;
-  status: "uploading" | "complete";
-  submittedAt: { toDate: () => Date } | null;
-}
-
-export interface ExternalEventRegistration {
-  eventId: string;
-  studentRegistrationNumber: string;
-  broughtByMemberId: string;
-  driveFileName: string | null;
-  status: "uploading" | "complete";
-  submittedAt: { toDate: () => Date } | null;
-}

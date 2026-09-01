@@ -16,6 +16,8 @@ export default function Dashboard() {
   const [upcomingMeetings, setUpcomingMeetings] = useState<Meeting[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<ClubEvent[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [meetingStats, setMeetingStats] = useState<{ attended: number; total: number }>({ attended: 0, total: 0 });
+  const [eventStats, setEventStats] = useState<{ attended: number; total: number }>({ attended: 0, total: 0 });
   const [attendanceStats, setAttendanceStats] = useState<{ present: number; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -25,28 +27,62 @@ export default function Dashboard() {
 
     let meetingRecords: MeetingAttendance[] = [];
     let eventRecords: EventAttendance[] = [];
+    let publishedEventsById = new Map<string, ClubEvent>();
+    let meetingsById = new Map<string, Meeting>();
 
     const recalculateAttendance = () => {
-      const allRecords = [...meetingRecords, ...eventRecords];
-      // Only marked records (status set to Present, Absent, or Other)
-      const marked = allRecords.filter((r) => r.status === "Present" || r.status === "Absent" || r.status === "Other");
-      const present = marked.filter((r) => r.status === "Present").length;
-      setAttendanceStats(marked.length > 0 ? { present, total: marked.length } : { present: 0, total: 0 });
+      const markedMeetings = meetingRecords.filter((r) => {
+        const m = meetingsById.get(r.meetingId);
+        return m && m.status !== "cancelled" && (r.status === "Present" || r.status === "Absent" || r.status === "Other");
+      });
+      const presentMeetings = markedMeetings.filter((r) => r.status === "Present").length;
+      setMeetingStats({ attended: presentMeetings, total: markedMeetings.length });
+
+      const markedEvents = eventRecords.filter((r) => {
+        const ev = publishedEventsById.get(r.eventId);
+        return ev && ev.status === "published" && (r.status === "Present" || r.status === "Absent" || r.status === "Other");
+      });
+      const presentEvents = markedEvents.filter((r) => r.status === "Present").length;
+      setEventStats({ attended: presentEvents, total: markedEvents.length });
+
+      const allMarked = [...markedMeetings, ...markedEvents];
+      const allPresent = presentMeetings + presentEvents;
+      setAttendanceStats(allMarked.length > 0 ? { present: allPresent, total: allMarked.length } : { present: 0, total: 0 });
     };
 
     const unsubMeetings = onSnapshot(
-      query(collection(db, "meetings"), where("status", "==", "scheduled"), where("date", ">=", todayStr), orderBy("date"), limit(5)),
+      collection(db, "meetings"),
       (snap) => {
-        setUpcomingMeetings(snap.docs.map((d) => ({ ...d.data(), meetingId: d.data().meetingId || d.id } as Meeting)));
+        const map = new Map<string, Meeting>();
+        snap.docs.forEach((d) => map.set(d.id, { ...d.data(), meetingId: d.data().meetingId || d.id } as Meeting));
+        meetingsById = map;
+
+        const upcoming = Array.from(map.values())
+          .filter((m) => m.status === "scheduled" && m.date >= todayStr)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(0, 5);
+        setUpcomingMeetings(upcoming);
+
+        recalculateAttendance();
         setLoading(false);
       },
       () => setLoading(false)
     );
 
     const unsubEvents = onSnapshot(
-      query(collection(db, "events"), where("status", "==", "published"), where("date", ">=", todayStr), orderBy("date"), limit(5)),
+      query(collection(db, "events"), where("status", "==", "published")),
       (snap) => {
-        setUpcomingEvents(snap.docs.map((d) => ({ ...d.data(), eventId: d.data().eventId || d.id } as ClubEvent)));
+        const map = new Map<string, ClubEvent>();
+        snap.docs.forEach((d) => map.set(d.id, { ...d.data(), eventId: d.data().eventId || d.id } as ClubEvent));
+        publishedEventsById = map;
+
+        const upcoming = Array.from(map.values())
+          .filter((ev) => ev.date >= todayStr)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(0, 5);
+        setUpcomingEvents(upcoming);
+
+        recalculateAttendance();
         setLoading(false);
       },
       () => setLoading(false)
@@ -122,12 +158,16 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <div className="stat-value">{upcomingMeetings.length}</div>
+          <div className="stat-value">
+            {meetingStats.attended}/{meetingStats.total}
+          </div>
           <div className="stat-label">Meetings</div>
         </div>
 
-        <div className="stat-card stat-card-total">
-          <div className="stat-value">{upcomingEvents.length}</div>
+        <div className="stat-card stat-card-other">
+          <div className="stat-value">
+            {eventStats.attended}/{eventStats.total}
+          </div>
           <div className="stat-label">Events</div>
         </div>
       </div>
@@ -221,7 +261,7 @@ export default function Dashboard() {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255, 107, 53, 0.1)" }}>
                       <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
-                        Closes: {new Date(ev.registrationDeadline).toLocaleDateString()}
+                        ⏰ {ev.startTime} – {ev.endTime}
                       </span>
                       <span className="btn btn-primary btn-sm" style={{ padding: "4px 8px", fontSize: "0.75rem", minHeight: "28px" }}>
                         Details →
