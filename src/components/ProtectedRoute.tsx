@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import logo from "../assets/logo.png";
 
 export default function ProtectedRoute({ children }: { children: JSX.Element }) {
   const { user, member, loading, signOut } = useAuth();
@@ -23,7 +24,7 @@ export default function ProtectedRoute({ children }: { children: JSX.Element }) 
       <div className="login-shell fatal-screen">
         <div className="card fatal-card">
           <div className="gate-brand-container" style={{ marginBottom: 16 }}>
-            <img src="/logo.png" alt="Swarajya Logo" className="gate-logo-img" style={{ width: 56, height: 56 }} />
+            <img src={logo} alt="Swarajya Logo" className="gate-logo-img" style={{ width: 56, height: 56 }} />
             <span className="eyebrow">Setup Required</span>
             <h2 className="fatal-headline" style={{ color: "var(--text-primary)" }}>
               Account Profile Pending
@@ -48,7 +49,7 @@ export default function ProtectedRoute({ children }: { children: JSX.Element }) 
       <div className="login-shell fatal-screen">
         <div className="card fatal-card">
           <div className="gate-brand-container" style={{ marginBottom: 16 }}>
-            <img src="/logo.png" alt="Swarajya Logo" className="gate-logo-img" style={{ width: 56, height: 56 }} />
+            <img src={logo} alt="Swarajya Logo" className="gate-logo-img" style={{ width: 56, height: 56 }} />
             <span className="eyebrow" style={{ color: "var(--duplicate)" }}>Access Restricted</span>
             <h2 className="fatal-headline" style={{ color: "var(--text-primary)" }}>
               Account Deactivated

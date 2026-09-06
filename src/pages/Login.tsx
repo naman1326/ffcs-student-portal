@@ -5,6 +5,7 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { friendlyError } from "../lib/api";
+import logo from "../assets/logo.png";
 
 export default function Login() {
   const { user, signIn, loading } = useAuth();
@@ -50,7 +51,7 @@ export default function Login() {
     <div className="login-shell gate-screen">
       <div className="card login-card gate-card">
         <div className="gate-brand-container">
-          <img src="/logo.png" alt="Swarajya Logo" className="gate-logo-img" />
+          <img src={logo} alt="Swarajya Logo" className="gate-logo-img" />
           <span className="gate-brand-title brand-title">स्वराज्य</span>
           <span className="gate-brand-subtitle brand-subtitle">FFCS Member Portal</span>
         </div>

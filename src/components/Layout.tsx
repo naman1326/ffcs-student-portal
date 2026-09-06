@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import logo from "../assets/logo.png";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", end: true, icon: "📊" },
@@ -30,7 +31,7 @@ export default function Layout() {
         <div className="sidebar-header">
           <div className="brand">
             <div className="brand-icon-wrapper">
-              <img src="/logo.png" alt="Swarajya Logo" className="brand-logo-img" />
+              <img src={logo} alt="Swarajya Logo" className="brand-logo-img" />
             </div>
             <div className="brand-text-block">
               <span className="brand-title">स्वराज्य</span>
@@ -79,7 +80,7 @@ export default function Layout() {
         {/* Mobile Top App Bar (visible on <= 768px) */}
         <header className="topbar">
           <div className="topbar-brand">
-            <img src="/logo.png" alt="Swarajya Logo" className="topbar-logo-img" />
+            <img src={logo} alt="Swarajya Logo" className="topbar-logo-img" />
             <span className="brand-title" style={{ fontSize: "1.3rem" }}>
               स्वराज्य
             </span>
